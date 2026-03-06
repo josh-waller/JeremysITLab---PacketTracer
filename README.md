@@ -22,7 +22,7 @@ Set up **VTPv2** with *JeremysITLab* as the domain, using distribution switc
 Assigned access ports:
 
 - PCs → VLAN 10
-- IP phones → VLAN 20
+- IP Phones → VLAN 20
 - SRV1 → VLAN 30
 
 Configured these as access mode with DTP disabled.
@@ -81,7 +81,7 @@ Added two recursive default routes on R1 toward the Internet, making the **G0/1
 ## **DHCP, DNS, NTP, SNMP, Syslog, FTP, SSH, NAT**
 
 - **DHCP:** Built pools on R1 for all management, PC, phone, and Wi‑Fi subnets. Excluded first 10 addresses and used **SRV1** as DNS/DHCP Option provider. Distribution switches served as DHCP relays.
-- **DNS:** On SRV1, created A and CNAME records for *google.com, youtube.com, jeremysitlab.com,* and [**www.jeremysitlab.com](http://www.jeremysitlab.com/) → jeremysitlab.com**.
+- **DNS:** On SRV1, created A and CNAME records for *google.com, youtube.com, jeremysitlab.com,* and **www.jeremysitlab.com**.
 - **NTP:** R1 as authenticated stratum‑5 server syncing to 216.239.35.0; all network devices used R1’s loopback as NTP source with key 1 and password `ccna`.
 - **SNMP:** Configured with read‑only community string `SNMPSTRING`.
 - **Syslog:** Forwarded all severity levels to SRV1 and local buffer (8192 bytes).
