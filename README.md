@@ -1,183 +1,104 @@
-# CCNA Mega Lab — Enterprise Network Implementation
+# Enterprise Two-Site Network — CCNA Mega Lab
 
-![Cisco](https://img.shields.io/badge/Cisco-Packet_Tracer-1BA0D7?logo=cisco&logoColor=white)
-![CCNA](https://img.shields.io/badge/CCNA-200--301-blue)
+![Cisco Packet Tracer](https://img.shields.io/badge/Cisco-Packet_Tracer-1BA0D7?logo=cisco&logoColor=white)
+![CCNA 200-301](https://img.shields.io/badge/CCNA-200--301-0076CE)
 ![Status](https://img.shields.io/badge/Status-Complete-brightgreen)
 
-Implemented a full two-office enterprise network with VLANs, Layer-2 and Layer-3 EtherChannels, OSPF, HSRP, DHCP, NAT, security (ACLs, port security, DHCP snooping, DAI), IPv6, and wireless — following **Jeremy's IT Lab CCNA Mega Lab** design.
-
-## Topology
+Full two-office enterprise network covering VLANs, EtherChannels, OSPF, HSRP, DHCP, NAT/PAT, Layer-2 security, IPv6 dual-stack, and wireless — built in Cisco Packet Tracer following the [Jeremy's IT Lab CCNA Mega Lab](https://www.jeremysitlab.com/) curriculum.
 
 ![Network Topology](ccna_JPKT.png)
 
-## Technologies and Protocols
+---
 
-| Category | Technologies |
-|----------|-------------|
-| **Switching** | VLANs, 802.1Q Trunking, VTPv2, EtherChannel (PAgP, LACP) |
-| **Routing** | OSPF (single-area), Static/Floating Routes, Inter-VLAN Routing |
-| **Redundancy** | HSRPv2, Rapid PVST+ |
-| **Services** | DHCP, DNS, NTP, SNMP, Syslog, FTP, NAT/PAT |
-| **Security** | ACLs, Port Security, DHCP Snooping, DAI, SSHv2, BPDU Guard |
-| **IPv6** | Dual-stack, EUI-64, Static/Floating IPv6 Routes |
-| **Wireless** | WLC, LWAP, WPA2-AES |
-| **Discovery** | LLDP (CDP disabled) |
+## Architecture Overview
 
-## Key Skills Demonstrated
+| Layer | Components | Role |
+|-------|-----------|------|
+| **Core** | CSW1, CSW2 | L3 EtherChannel interconnect, OSPF backbone, inter-site routing |
+| **Distribution** | DSW-A1/A2, DSW-B1/B2 | HSRPv2 gateways, DHCP relay, STP root bridges, trunk aggregation |
+| **Access** | ASW-A1/A2, ASW-B1/B2 | Host connectivity, port security, DHCP snooping, DAI |
+| **Edge** | R1 | Dual ISP uplinks, NAT/PAT, OSPF ASBR, NTP stratum-5 source |
+| **Services** | SRV1, WLC1 | DNS, FTP, Syslog, SNMP trap receiver, wireless controller |
 
-- Enterprise network design and implementation across two office sites
-- Layer-2 and Layer-3 redundancy with HSRP and STP root alignment
-- OSPF routing with passive interfaces, non-broadcast configuration, and default route redistribution
-- Network services deployment (DHCP relay, DNS records, NTP authentication, SNMP monitoring)
-- Defence-in-depth security with ACLs, port security, DHCP snooping, and DAI
-- NAT/PAT with static mappings and dynamic pools for Internet access
-- IPv6 dual-stack deployment with EUI-64 addressing
-- Wireless LAN controller configuration with LWAP association
+## Addressing and VLAN Scheme
+
+| VLAN | Purpose | Office A | Office B |
+|------|---------|----------|----------|
+| 10 | PCs | Yes | Yes |
+| 20 | IP Phones | Yes | Yes |
+| 30 | Servers | — | Yes |
+| 40 | Wi-Fi | Yes | — |
+| 99 | Management | Yes | Yes |
+| 1000 | Native (unused) | Yes | Yes |
+
+- Point-to-point links use /30 subnets; loopbacks use /32
+- SRV1: 10.5.0.4/24
+- WLC1 management: 10.0.0.7
+- NAT pool: 203.0.113.200–207/29 (RFC 5737 TEST-NET-3)
+- Static NAT: SRV1 mapped to 203.0.113.113
+- IPv6: 2001:db8::/32 documentation prefix with EUI-64 on R1–CSW links
 
 ---
 
-## VLANs and EtherChannels
+## Switching
 
-Built Layer-2 EtherChannels between distribution pairs in both offices: PAgP (Cisco-proprietary) in Office A and LACP (open standard) in Office B, with both sides actively negotiating.
+**EtherChannels** — L2 bundles between distribution pairs: PAgP in Office A, LACP in Office B. L3 PortChannel1 between CSW1/CSW2 with /30 addressing.
 
-Configured all access-distribution links, including EtherChannels, as **802.1Q trunks** with DTP disabled, native VLAN 1000, and specific VLANs allowed per office:
+**Trunking** — All inter-switch links run 802.1Q with DTP disabled and native VLAN 1000. Per-office VLAN pruning applied.
 
-- Office A: 10, 20, 40, 99
-- Office B: 10, 20, 30, 99
+**VTP** — Version 2, domain *JeremysITLab*. Distribution switches as servers, access switches as clients.
 
-Set up **VTPv2** with *JeremysITLab* as the domain, using distribution switches as servers and access switches as clients, then created and propagated VLANs for PCs, phones, Wi-Fi, and management.
+**Spanning Tree** — Rapid PVST+ with root bridges aligned to HSRP active gateways. PortFast and BPDU Guard on all host-facing ports.
 
----
+## Routing
 
-## Access Layer and WLC Connectivity
+**OSPF** — Single-area (Area 0) on all L3 interfaces. Router IDs set to loopback addresses. SVIs and loopbacks configured as passive. Physical inter-switch links set to non-broadcast network type to suppress DR/BDR elections.
 
-Assigned access ports:
+**Default Routes** — Dual recursive defaults toward ISP via R1. G0/1/0 path configured as floating static (higher AD). Default route redistributed into OSPF (R1 as ASBR).
 
-- PCs -> VLAN 10
-- IP Phones -> VLAN 20
-- SRV1 -> VLAN 30
+**IPv6** — Dual-stack enabled on R1, CSW1, CSW2. Two default IPv6 routes with floating backup. Link-local addressing on PortChannel1.
 
-Configured these as access mode with DTP disabled.
+## First-Hop Redundancy
 
-Linked **ASW-A1** to **WLC1** via a trunk supporting VLAN 40 (Wi-Fi) and VLAN 99 (Management), with management untagged and DTP off.
+**HSRPv2** — Multiple groups per office, one per VLAN subnet. Active/standby split across distribution pairs for load distribution:
 
-Administratively shut down all unused access and distribution switch ports for improved security and network hygiene.
+| Office | DSW-x1 Active | DSW-x2 Active |
+|--------|--------------|--------------|
+| A | Management, PCs | Phones, Wi-Fi |
+| B | Management, PCs | Phones, Servers |
 
----
+Preemption enabled on all groups.
 
-## IPv4 Addressing and Layer-3 Core
+## Network Services
 
-Assigned IPv4 addresses to **R1** (two Internet DHCP client links, WAN point-to-point links, and Loopback0).
+| Service | Implementation |
+|---------|---------------|
+| **DHCP** | Pools on R1 per subnet, first 10 addresses excluded. Distribution switches relay via `ip helper-address`. |
+| **DNS** | A and CNAME records on SRV1 for internal and simulated external hosts. |
+| **NTP** | R1 as stratum-5 source with MD5 authentication. All devices sync to R1 loopback. |
+| **SNMP** | Read-only community configured; traps sent to SRV1. |
+| **Syslog** | All severity levels forwarded to SRV1. Local buffer set to 8192 bytes. |
+| **FTP** | IOS image transfer from SRV1 to R1. |
+| **NAT/PAT** | Static mapping for SRV1; dynamic PAT for user subnets via named pool. |
 
-Enabled IPv4 routing on all core and distribution switches and built a **Layer-3 EtherChannel (PortChannel1)** between CSW1 and CSW2 using a Cisco-proprietary protocol with /30 addressing.
+## Security
 
-Configured all /30 and /32 addresses on CSW1, CSW2, and the distribution switches, disabling all unused Layer-3 interfaces.
+| Control | Scope | Detail |
+|---------|-------|--------|
+| **Extended ACLs** | Inter-office traffic | ICMP permitted between Office A/B PC subnets; all other cross-office traffic denied |
+| **SSH** | Management plane | SSHv2 only on VTY lines, RSA 2048-bit keys, ACL restricting source to Office A PCs |
+| **Port Security** | SRV1 (F0/1) | Single MAC, sticky learning, restrict violation mode |
+| **DHCP Snooping** | All VLANs | Uplinks trusted, untrusted ports rate-limited (15 pps; 100 pps on WLC link) |
+| **DAI** | All VLANs | Trusted uplinks, full ARP validation (src-mac, dst-mac, IP) |
+| **BPDU Guard** | All host ports | Automatic err-disable on unexpected BPDU |
+| **Unused Ports** | All switches | Administratively shut down |
 
-Manually configured **SRV1 (10.5.0.4/24, gw 10.5.0.1)** and management SVIs on all access switches using VLAN 99 and correct gateways.
+## Wireless
 
----
+- WLC1 with dynamic interface on VLAN 40 (Wi-Fi subnet)
+- WLAN ID 1 configured with WPA2-AES PSK
+- Both LWAPs verified joined to WLC1
 
-## HSRP Redundancy
+## Discovery
 
-Implemented multiple **HSRPv2 groups per office** matching each subnet:
-
-- **Office A:** DSW-A1 active for Management & PCs, DSW-A2 active for Phones & Wi-Fi
-- **Office B:** DSW-B1 active for Management & PCs, DSW-B2 active for Phones & Servers
-
-Used increased priority and preemption for proper failover.
-
----
-
-## Spanning Tree (Rapid PVST+)
-
-Enabled **Rapid PVST+** across all access and distribution switches so each VLAN maintains its own STP instance.
-
-Aligned **STP root bridges** with HSRP actives (lowest priority), with standby devices one increment higher.
-
-Enabled **PortFast** and **BPDU Guard** on all host interfaces (including WLC1) for faster convergence and STP protection.
-
----
-
-## OSPF and Default Routes
-
-Configured **OSPF Process 1** in Area 0 on R1's LAN-facing and core/distribution Layer-3 interfaces.
-
-Set router IDs to loopbacks, enabled OSPF on loopbacks (passive), and made SVIs passive except management.
-
-Configured physical OSPF links (not the L3 PortChannel) as **non-broadcast** to avoid DR/BDR elections.
-
-Added two recursive default routes on R1 toward the Internet, making the **G0/1/0** route a floating static (higher AD), and redistributed the default into OSPF so R1 operated as the **ASBR**.
-
----
-
-## DHCP, DNS, NTP, SNMP, Syslog, FTP, SSH, NAT
-
-- **DHCP:** Built pools on R1 for all management, PC, phone, and Wi-Fi subnets. Excluded first 10 addresses and used **SRV1** as DNS/DHCP Option provider. Distribution switches served as DHCP relays.
-- **DNS:** On SRV1, created A and CNAME records for *google.com, youtube.com, jeremysitlab.com,* and **www.jeremysitlab.com**.
-- **NTP:** R1 as authenticated stratum-5 server syncing to 216.239.35.0; all network devices used R1's loopback as NTP source with key 1 and password `<redacted>`.
-- **SNMP:** Configured with read-only community string `<redacted>`.
-- **Syslog:** Forwarded all severity levels to SRV1 and local buffer (8192 bytes).
-- **FTP:** R1 downloaded and booted a new IOS from SRV1 using default credentials (`<redacted>`).
-- **SSH:** Enabled SSHv2, generated large RSA keys, restricted VTY access to SSH only, created local users, used ACLs to allow only Office A PCs, and enabled synchronous logging.
-- **NAT:**
-    - Static NAT for SRV1 -> 203.0.113.113
-    - Dynamic PAT for PC/Phone/Wi-Fi subnets using pool POOL1 (203.0.113.200-203.0.113.207/29).
-    - Verified Internet access and failover by toggling G0/0/0 and OSPF defaults.
-
----
-
-## LLDP and CDP
-
-Disabled **CDP**, enabled **LLDP** on all devices for vendor-neutral discovery.
-
-Disabled LLDP transmit on access port F0/1 to conceal hosts.
-
----
-
-## ACLs and Layer-2 Security
-
-Created **extended ACL OfficeA_to_OfficeB** to:
-
-- Permit ICMP between Office A and Office B PC subnets
-- Block all other traffic between those two
-- Permit all else
-
-Applied per extended ACL best practice.
-
-Secured access ports with:
-
-- **Port Security:** F0/1 limited to one MAC (SRV1), sticky learning, restrict mode, notification on violations
-- **DHCP Snooping:** Active for all VLANs, uplinks trusted only, rate-limits (15 pps untrusted, 100 pps on WLC link), Option 82 disabled
-- **Dynamic ARP Inspection:** Enabled for all VLANs, ports correctly trusted, full validation enabled.
-
----
-
-## IPv6 Preparation
-
-Enabled IPv6 routing on R1, CSW1, and CSW2.
-
-Assigned:
-
-- 2001:db8:a::2/64 and 2001:db8:b::2/64 on R1's Internet links
-- 2001:db8:a1::/64 and 2001:db8:a2::/64 (using EUI-64) on R1-CSW links
-
-Enabled IPv6 on CSW1/CSW2 PortChannel1 (without explicit addressing).
-
-Added two default IPv6 routes:
-
-- Recursive -> 2001:db8:a::1
-- Floating backup -> 2001:db8:b::1 (higher AD)
-
----
-
-## Wireless Configuration
-
-Accessed **WLC1** GUI (10.0.0.7, credentials `<redacted>`).
-
-Created dynamic interface *Wi-Fi* for VLAN 40 (IP *.4 in 10.6.0.0/24, gateway .1, DHCP 10.0.0.76, Port 1).
-
-Configured and enabled **WLAN ID 1**:
-
-Profile name/SSID -> *Wi-Fi*, security -> WPA2 AES PSK `<redacted>`.
-
-Verified that both **LWAPs** joined WLC1 successfully (noting Packet Tracer's DHCP limitation for wireless clients).
+CDP disabled globally. LLDP enabled on all devices with transmit disabled on host-facing port F0/1 to prevent endpoint enumeration.
